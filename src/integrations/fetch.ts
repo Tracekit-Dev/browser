@@ -86,6 +86,7 @@ export function instrumentFetch(client: BrowserClient): () => void {
           // Update init with new headers
           modifiedInit = { ...init, headers: existingHeaders };
         }
+        client.getScope().setRecentTraceContext(traceId, spanId);
       }
     }
 
