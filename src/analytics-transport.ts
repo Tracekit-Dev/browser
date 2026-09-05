@@ -13,7 +13,12 @@ export class BrowserAnalyticsTransport {
 
   async send(event: BrowserAnalyticsEvent): Promise<boolean> {
     if (!this.config.enabled) return false;
-    const body = JSON.stringify(event);
+    let body: string;
+    try {
+      body = JSON.stringify(event);
+    } catch {
+      return false;
+    }
     const bytes = new TextEncoder().encode(body).byteLength;
     if (bytes > MAX_ANALYTICS_BODY_BYTES) return false;
     try {

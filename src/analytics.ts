@@ -57,14 +57,39 @@ const cleanString = (value: unknown, maxBytes: number): string => {
 const validHex = (value: unknown, length: number): value is string =>
   typeof value === 'string' && new RegExp(`^(?!0{${length}})[0-9a-f]{${length}}$`).test(value);
 
-function validProperties(value: unknown, depth = 1, keys = { count: 0 }): value is Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || depth > 5) return false;
-  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-    keys.count += 1;
-    if (keys.count > 50 || key.length < 1 || new TextEncoder().encode(key).byteLength > 64) return false;
-    if (typeof item === 'string' && new TextEncoder().encode(item).byteLength > 1024) return false;
-    if (item && typeof item === 'object' && !validProperties(item, depth + 1, keys)) return false;
+function validProperties(value: unknown, depth = 1, keys = { count: 0 }, seen = new Set<object>()): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  return validPropertyValue(value, depth, keys, seen);
+}
+
+function validPropertyValue(value: unknown, depth: number, keys: { count: number }, seen: Set<object>): boolean {
+  if (depth > 5) return false;
+  if (value === null || typeof value === 'boolean' || typeof value === 'string') {
+    return typeof value !== 'string' || new TextEncoder().encode(value).byteLength <= 1024;
   }
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value === 'bigint' || typeof value === 'function' || typeof value === 'symbol' || typeof value === 'undefined') return false;
+  if (typeof value !== 'object' || seen.has(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null && !Array.isArray(value)) return false;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    for (const child of value) {
+      if (!validPropertyValue(child, depth + 1, keys, seen)) {
+        seen.delete(value);
+        return false;
+      }
+    }
+  } else {
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      keys.count += 1;
+      if (keys.count > 50 || key.length < 1 || new TextEncoder().encode(key).byteLength > 64 || !validPropertyValue(child, depth + 1, keys, seen)) {
+        seen.delete(value);
+        return false;
+      }
+    }
+  }
+  seen.delete(value);
   return true;
 }
 
@@ -98,6 +123,18 @@ function parseAttribution(raw: string, referrer: string, sessionId: string): Att
     utm_term: value('utm_term'),
     utm_content: value('utm_content'),
   };
+}
+
+function isValidAttribution(value: unknown, sessionId: string): value is Attribution {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<Attribution>;
+  if (!validHex(candidate.sessionId, 32) || candidate.sessionId !== sessionId) return false;
+  if (typeof candidate.pageUrl !== 'string' || sanitizeURL(candidate.pageUrl) !== candidate.pageUrl) return false;
+  if (typeof candidate.referrer !== 'string' || (candidate.referrer !== '' && sanitizeURL(candidate.referrer) !== candidate.referrer)) return false;
+  for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'] as const) {
+    if (typeof candidate[key] !== 'string' || cleanString(candidate[key], 255) !== candidate[key]) return false;
+  }
+  return true;
 }
 
 export class AnalyticsCollector {
@@ -137,8 +174,12 @@ export class AnalyticsCollector {
   }
 
   track(name: string, properties: Record<string, unknown> = {}, context?: { userId?: string; releaseId?: string; trace?: RecentTraceContext; replayId?: string }): string {
-    if (!this.config.enabled || name.startsWith('$') || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/.test(name) || !validProperties(properties)) return '';
-    return this.capture(name, properties, context);
+    try {
+      if (!this.config.enabled || typeof name !== 'string' || name.startsWith('$') || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/.test(name) || !validProperties(properties)) return '';
+      return this.capture(name, properties, context);
+    } catch {
+      return '';
+    }
   }
 
   private capture(eventName: string, properties: Record<string, unknown>, context?: { userId?: string; releaseId?: string; trace?: RecentTraceContext; replayId?: string }): string {
@@ -178,7 +219,11 @@ export class AnalyticsCollector {
       ['span_id', validHex(context?.trace?.spanId, 16) ? context?.trace?.spanId : ''],
     ];
     for (const [key, value] of optional) if (value) (event as unknown as Record<string, unknown>)[key] = value;
-    if (new TextEncoder().encode(JSON.stringify(event)).byteLength > MAX_ANALYTICS_BODY_BYTES) return '';
+    try {
+      if (new TextEncoder().encode(JSON.stringify(event)).byteLength > MAX_ANALYTICS_BODY_BYTES) return '';
+    } catch {
+      return '';
+    }
     void this.transport.send(Object.freeze(event));
     return event.event_id;
   }
@@ -211,7 +256,7 @@ export class AnalyticsCollector {
         const saved = this.cookies.get(ATTRIBUTION_COOKIE);
         if (saved) {
           const parsed = JSON.parse(decodeURIComponent(saved)) as Attribution;
-          if (parsed.sessionId === session && typeof parsed.pageUrl === 'string') attribution = parsed;
+        if (isValidAttribution(parsed, session)) attribution = parsed;
         }
       } catch {
         attribution = null;

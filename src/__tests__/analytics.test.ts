@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AnalyticsCollector } from '../analytics';
+import { AnalyticsCollector, defaultAnalyticsCookies } from '../analytics';
 import { BrowserAnalyticsTransport } from '../analytics-transport';
 import { resolveConfig } from '../config';
 import type { AnalyticsCookieAdapter } from '../analytics';
@@ -14,10 +14,97 @@ describe('browser analytics', () => {
     const cookie = cookies();
     const send = vi.fn();
     const transport = { send } as unknown as BrowserAnalyticsTransport;
-    const collector = new AnalyticsCollector(resolveConfig({ apiKey: 'key', enabled: false }), transport);
+    const collector = new AnalyticsCollector(resolveConfig({ apiKey: 'key', enabled: false }), transport, { cookies: cookie });
     expect(collector.capturePageview()).toBe('');
     expect(send).not.toHaveBeenCalled();
     expect(cookie.get('tracekit_visitor_id')).toBeUndefined();
+  });
+
+  it('keeps identities active and starts a new session after inactivity', () => {
+    const cookie = cookies();
+    let now = 1_000_000;
+    let current = new URL('https://example.test/landing?utm_campaign=first');
+    const events: Array<{ visitor_id: string; session_id: string; utm_campaign: string }> = [];
+    const collector = new AnalyticsCollector(resolveConfig({ apiKey: 'key' }), { send: vi.fn((event) => { events.push(event); return Promise.resolve(true); }) } as never, {
+      cookies: cookie,
+      now: () => now,
+      location: () => current as unknown as Location,
+      document: () => ({ title: '', referrer: '' } as unknown as Document),
+    });
+    collector.capturePageview();
+    const first = events[0];
+    now += 29 * 60 * 1000;
+    current = new URL('https://example.test/active');
+    collector.capturePageview();
+    expect(events[1].visitor_id).toBe(first.visitor_id);
+    expect(events[1].session_id).toBe(first.session_id);
+    now += 30 * 60 * 1000;
+    current = new URL('https://example.test/new');
+    collector.capturePageview();
+    expect(events[2].visitor_id).toBe(first.visitor_id);
+    expect(events[2].session_id).not.toBe(first.session_id);
+    expect(events[2].utm_campaign).toBe('');
+  });
+
+  it('rejects a modified attribution cookie and creates a clean snapshot', () => {
+    const cookie = cookies();
+    let current = new URL('https://example.test/landing?utm_source=clean');
+    const collector = new AnalyticsCollector(resolveConfig({ apiKey: 'key' }), { send: vi.fn(() => Promise.resolve(true)) } as never, {
+      cookies: cookie,
+      location: () => current as unknown as Location,
+      document: () => ({ title: '', referrer: 'https://safe.example/ref' } as unknown as Document),
+    });
+    collector.capturePageview();
+    const session = cookie.get('tracekit_session_id')!;
+    cookie.set('tracekit_session_attribution', encodeURIComponent(JSON.stringify({ sessionId: session, pageUrl: 'https://example.test/landing', referrer: 'https://referrer.test/path?token=secret#fragment', utm_source: 'unsafe', utm_medium: '', utm_campaign: '', utm_term: '', utm_content: '' })), 1800);
+    current = new URL('https://example.test/next');
+    const send = vi.fn(() => Promise.resolve(true));
+    const restored = new AnalyticsCollector(resolveConfig({ apiKey: 'key' }), { send } as never, {
+      cookies: cookie,
+      location: () => current as unknown as Location,
+      document: () => ({ title: '', referrer: 'https://safe.example/ref' } as unknown as Document),
+    });
+    restored.capturePageview();
+    const restoredEvent = (send.mock.calls as unknown as Array<Array<{ referrer: string }>>)[0][0];
+    expect(restoredEvent.referrer).toBe('https://safe.example/ref');
+  });
+
+  it('accepts nested arrays and never throws for unsupported goal values', () => {
+    const send = vi.fn(() => Promise.resolve(true));
+    const collector = new AnalyticsCollector(resolveConfig({ apiKey: 'key' }), { send } as never, {
+      location: () => new URL('https://example.test/') as unknown as Location,
+      document: () => ({ title: '', referrer: '' } as unknown as Document),
+    });
+    expect(() => collector.track('array_goal', { values: [{ nested: ['ok', 1, null] }] })).not.toThrow();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(() => collector.track('bigint_goal', { value: BigInt(1) })).not.toThrow();
+    expect(collector.track('bigint_goal', { value: BigInt(1) })).toBe('');
+  });
+
+  it('uses memory-only identity when cookies fail', () => {
+    const failingCookies: AnalyticsCookieAdapter = { get: () => { throw new Error('blocked'); }, set: () => { throw new Error('blocked'); } };
+    let current = new URL('https://example.test/one');
+    const events: Array<{ visitor_id: string; session_id: string }> = [];
+    const collector = new AnalyticsCollector(resolveConfig({ apiKey: 'key' }), { send: vi.fn((event) => { events.push(event); return Promise.resolve(true); }) } as never, {
+      cookies: failingCookies,
+      location: () => current as unknown as Location,
+      document: () => ({ title: '', referrer: '' } as unknown as Document),
+    });
+    collector.capturePageview();
+    current = new URL('https://example.test/two');
+    collector.capturePageview();
+    expect(events[1].visitor_id).toBe(events[0].visitor_id);
+    expect(events[1].session_id).toBe(events[0].session_id);
+  });
+
+  it('writes the required first-party cookie attributes', () => {
+    const adapter = defaultAnalyticsCookies();
+    const setter = vi.spyOn(document, 'cookie', 'set');
+    adapter.set('tracekit_session_id', 'session', 1800);
+    expect(setter).toHaveBeenCalledWith(expect.stringContaining('Path=/'));
+    expect(setter).toHaveBeenCalledWith(expect.stringContaining('Max-Age=1800'));
+    expect(setter).toHaveBeenCalledWith(expect.stringContaining('SameSite=Lax'));
+    setter.mockRestore();
   });
 
   it('keeps first-touch attribution and removes query and fragment values', () => {
