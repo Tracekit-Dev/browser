@@ -71,6 +71,7 @@ export function instrumentXHR(client: BrowserClient): () => void {
       traceparentValue = traceparent;
       try {
         this.setRequestHeader('traceparent', traceparent);
+        client.getScope().setRecentTraceContext(traceId, spanId);
       } catch {
         // setRequestHeader can throw if state is not OPENED -- silently ignore
       }

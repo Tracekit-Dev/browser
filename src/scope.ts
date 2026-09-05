@@ -7,7 +7,7 @@
  * rolling buffer (oldest dropped when capacity exceeded).
  */
 
-import type { UserContext, Breadcrumb, BrowserEvent } from './types';
+import type { UserContext, Breadcrumb, BrowserEvent, RecentTraceContext } from './types';
 
 export class Scope {
   private user: UserContext | null = null;
@@ -17,6 +17,7 @@ export class Scope {
   private maxBreadcrumbs: number;
   private beforeSend: ((event: BrowserEvent) => BrowserEvent | null) | null;
   private breadcrumbListener: ((crumb: Breadcrumb) => void) | null = null;
+  private recentTraceContext: RecentTraceContext | null = null;
 
   constructor(
     maxBreadcrumbs: number = 100,
@@ -38,6 +39,15 @@ export class Scope {
    */
   getUser(): UserContext | null {
     return this.user ? { ...this.user } : null;
+  }
+
+  setRecentTraceContext(traceId: string, spanId: string, capturedAt: number = Date.now()): void {
+    this.recentTraceContext = { traceId, spanId, capturedAt };
+  }
+
+  getRecentTraceContext(maxAgeMs: number, now: number = Date.now()): RecentTraceContext | null {
+    if (!this.recentTraceContext || now - this.recentTraceContext.capturedAt > maxAgeMs) return null;
+    return { ...this.recentTraceContext };
   }
 
   /**
@@ -135,5 +145,6 @@ export class Scope {
     this.tags = {};
     this.extras = {};
     this.breadcrumbs = [];
+    this.recentTraceContext = null;
   }
 }

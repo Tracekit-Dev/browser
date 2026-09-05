@@ -85,6 +85,12 @@ export function captureMessage(
   return client.captureMessage(message, level);
 }
 
+/** Record a custom analytics goal and return its stable event identifier. */
+export function track(name: string, properties: Record<string, unknown> = {}): string {
+  if (!client) return '';
+  return client.track(name, properties);
+}
+
 /**
  * Set or clear the current user context.
  * User context is attached to all subsequent events.
@@ -174,6 +180,8 @@ export type {
   ResolvedConfig,
   OTLPPayload,
   Integration,
+  BrowserAnalyticsEvent,
+  RecentTraceContext,
 } from './types';
 
 export { BrowserClient } from './client';
@@ -185,3 +193,5 @@ export { eventToOTLP, SDK_VERSION } from './otlp';
 export { collectDebugIds, getDebugIdForFile } from './debug-id';
 export { generateTraceId, generateSpanId } from './id';
 export { resolveConfig } from './config';
+export { AnalyticsCollector } from './analytics';
+export { BrowserAnalyticsTransport } from './analytics-transport';

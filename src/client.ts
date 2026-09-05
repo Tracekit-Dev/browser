@@ -28,6 +28,8 @@ import { instrumentFetch } from './integrations/fetch';
 import { instrumentXHR } from './integrations/xhr';
 import { instrumentDOM } from './integrations/dom';
 import { instrumentNavigation } from './integrations/navigation';
+import { AnalyticsCollector } from './analytics';
+import { BrowserAnalyticsTransport } from './analytics-transport';
 
 export class BrowserClient {
   private config: ResolvedConfig;
@@ -36,12 +38,16 @@ export class BrowserClient {
   private dedup: Deduplicator;
   private installed: boolean = false;
   private teardownFns: (() => void)[] = [];
+  private analytics: AnalyticsCollector | null = null;
 
   constructor(config: ResolvedConfig) {
     this.config = config;
     this.scope = new Scope(config.maxBreadcrumbs, config.beforeSend);
     this.transport = new BrowserTransport(config);
     this.dedup = new Deduplicator();
+    if (config.enabled) {
+      this.analytics = new AnalyticsCollector(config, new BrowserAnalyticsTransport(config));
+    }
   }
 
   /**
@@ -97,6 +103,8 @@ export class BrowserClient {
     }
 
     this.installed = true;
+
+    this.capturePageview();
 
     if (this.config.debug) {
       console.log('[TraceKit] Browser SDK initialized');
@@ -260,6 +268,36 @@ export class BrowserClient {
    */
   addBreadcrumb(crumb: Omit<Breadcrumb, 'timestamp'>): void {
     this.scope.addBreadcrumb(crumb);
+  }
+
+  track(name: string, properties: Record<string, unknown> = {}): string {
+    if (!this.config.enabled || !this.analytics) return '';
+    return this.analytics.track(name, properties, this.analyticsContext());
+  }
+
+  capturePageview(): string {
+    if (!this.config.enabled || !this.analytics) return '';
+    return this.analytics.capturePageview(this.analyticsContext());
+  }
+
+  private analyticsContext(): { userId?: string; releaseId?: string; trace?: import('./types').RecentTraceContext; replayId?: string } {
+    const userId = this.scope.getUser()?.id;
+    const context: { userId?: string; releaseId?: string; trace?: import('./types').RecentTraceContext; replayId?: string } = {
+      userId,
+      releaseId: this.config.release,
+      trace: this.scope.getRecentTraceContext(300_000) ?? undefined,
+    };
+    for (const addon of this.config.addons) {
+      if (addon.name !== 'replay') continue;
+      const candidate = addon as unknown as { getSessionId?: () => string };
+      try {
+        const replayId = candidate.getSessionId?.();
+        if (replayId) context.replayId = replayId;
+      } catch {
+        // Ignore malformed optional add-ons.
+      }
+    }
+    return context;
   }
 
   /**

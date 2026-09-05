@@ -145,6 +145,37 @@ export interface ResolvedConfig {
   };
 }
 
+/** JSON envelope sent by the browser analytics collector. */
+export interface BrowserAnalyticsEvent {
+  service_name: string;
+  event_id: string;
+  event_name: string;
+  event_time: string;
+  visitor_id: string;
+  session_id: string;
+  user_id?: string;
+  trace_id?: string;
+  span_id?: string;
+  replay_id?: string;
+  release_id?: string;
+  properties: Record<string, unknown>;
+  page_url: string;
+  page_path: string;
+  page_title: string;
+  referrer: string;
+  utm_source: string;
+  utm_medium: string;
+  utm_campaign: string;
+  utm_term: string;
+  utm_content: string;
+}
+
+export interface RecentTraceContext {
+  traceId: string;
+  spanId: string;
+  capturedAt: number;
+}
+
 // ============================================================================
 // OTLP JSON Types
 // ============================================================================
