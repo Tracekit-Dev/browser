@@ -72,7 +72,8 @@ function sanitizeURL(raw: string, base?: string): string {
   try {
     const parsed = new URL(raw, base);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
-    return `${parsed.origin}${parsed.pathname || '/'}`;
+    const sanitized = `${parsed.origin}${parsed.pathname || '/'}`;
+    return new TextEncoder().encode(sanitized).byteLength <= 2048 ? sanitized : '';
   } catch {
     return '';
   }
@@ -111,6 +112,12 @@ export class AnalyticsCollector {
   private lastPageviewURL = '';
   private memoryActivity = 0;
 
+  private newIdentifier(): string {
+    let identifier = generateTraceId();
+    while (/^0+$/.test(identifier)) identifier = generateTraceId();
+    return identifier;
+  }
+
   constructor(config: ResolvedConfig, transport = new BrowserAnalyticsTransport(config), options: AnalyticsCollectorOptions = {}) {
     this.config = config;
     this.transport = transport;
@@ -142,9 +149,11 @@ export class AnalyticsCollector {
     const pageURL = sanitizeURL(location.href);
     const pagePath = cleanString(location.pathname || '/', 2048) || '/';
     const pageTitle = cleanString(doc?.title ?? '', 512);
+    const serviceName = cleanString(this.config.serviceName, 255);
+    if (!serviceName) return '';
     const event: BrowserAnalyticsEvent = {
-      service_name: cleanString(this.config.serviceName, 255),
-      event_id: generateTraceId(),
+      service_name: serviceName,
+      event_id: this.newIdentifier(),
       event_name: eventName,
       event_time: new Date(this.now()).toISOString(),
       visitor_id: visitorId,
@@ -189,10 +198,10 @@ export class AnalyticsCollector {
     if (!visitor && this.visitorId) visitor = this.visitorId;
     if (!session && this.sessionId) session = this.sessionId;
     if (!activity && this.memoryActivity) activity = this.memoryActivity;
-    if (!validHex(visitor, 32)) visitor = generateTraceId();
+    if (!validHex(visitor, 32)) visitor = this.newIdentifier();
     const now = this.now();
     const sessionExpired = !validHex(session, 32) || !Number.isFinite(activity) || now - activity >= ANALYTICS_SESSION_MAX_AGE_MS;
-    if (sessionExpired) session = generateTraceId();
+    if (sessionExpired) session = this.newIdentifier();
     let attribution: Attribution | null = null;
     if (!sessionExpired && this.attribution?.sessionId === session) {
       attribution = this.attribution;
