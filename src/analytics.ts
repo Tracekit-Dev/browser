@@ -69,6 +69,7 @@ function validProperties(value: unknown, depth = 1, keys = { count: 0 }): value 
 }
 
 function sanitizeURL(raw: string, base?: string): string {
+  if (!raw) return '';
   try {
     const parsed = new URL(raw, base);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
