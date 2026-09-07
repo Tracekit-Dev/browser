@@ -358,6 +358,8 @@ export class BrowserClient {
    * Destroy the client: run teardown functions, destroy transport, clear scope.
    */
   destroy(): void {
+    this.analytics?.destroy();
+    this.analytics = null;
     for (const fn of this.teardownFns) {
       try {
         fn();

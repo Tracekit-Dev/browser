@@ -165,6 +165,8 @@ export class AnalyticsCollector {
     this.getDocument = options.document ?? (() => (typeof document === 'undefined' ? undefined : document));
   }
 
+  destroy(): void { this.transport.destroy(); }
+
   capturePageview(context?: { userId?: string; releaseId?: string; trace?: RecentTraceContext; replayId?: string }): string {
     if (!this.config.enabled || typeof this.getLocation() === 'undefined') return '';
     const raw = this.getLocation()!.href;

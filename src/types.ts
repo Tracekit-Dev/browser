@@ -170,6 +170,10 @@ export interface BrowserAnalyticsEvent {
   utm_content: string;
 }
 
+export interface BrowserAnalyticsBatch {
+  events: BrowserAnalyticsEvent[];
+}
+
 export interface RecentTraceContext {
   traceId: string;
   spanId: string;
