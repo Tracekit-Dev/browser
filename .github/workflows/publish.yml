@@ -20,18 +20,22 @@ concurrency:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   publish:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Install npm
+        run: npm install --global npm@11.5.1
 
       - name: Install dependencies
         run: npm ci
@@ -43,7 +47,7 @@ jobs:
         run: npm run build
 
       - name: Inspect package
-        run: npm pack --dry-run
+        run: npm pack --dry-run --json
 
       - name: Check registry version
         id: registry
@@ -54,6 +58,4 @@ jobs:
 
       - name: Publish unpublished version
         if: steps.registry.outputs.publish == 'true'
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance
