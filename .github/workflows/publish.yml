@@ -58,4 +58,4 @@ jobs:
 
       - name: Publish unpublished version
         if: steps.registry.outputs.publish == 'true'
-        run: npm publish --access public --provenance
+        run: npm publish --access public --provenance --tag latest

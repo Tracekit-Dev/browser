@@ -63,6 +63,7 @@ test('publishes through npm trusted publishing with the required toolchain', () 
   assert.doesNotMatch(workflow, /NPM_TOKEN|NODE_AUTH_TOKEN/);
   assert.match(workflow, /\.github\/workflows\/publish\.yml/);
   assert.match(workflow, /npm pack --dry-run --json/);
+  assert.match(workflow, /npm publish --access public --provenance --tag latest/);
 });
 
 test('keeps the package repository aligned with the trusted publisher', () => {
