@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { appendFileSync } from 'node:fs';
 
 export function classifyRegistryResult({ status, stdout = '', stderr = '' }) {
   if (status === 0) {
@@ -33,6 +34,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1);
   }
 
-  console.log(`publish=${decision.publish}`);
-  console.log(`reason=${decision.reason}`);
+  const outputs = `publish=${decision.publish}\nreason=${decision.reason}\n`;
+  if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, outputs);
+  console.log(outputs.trim());
 }
