@@ -52,6 +52,7 @@ export function instrumentNavigation(client: BrowserClient): () => void {
     const to = window.location.href;
     lastUrl = to;
     addNavigationBreadcrumb(from, to);
+    client.capturePageview();
   };
 
   // Patch history.replaceState
@@ -65,6 +66,7 @@ export function instrumentNavigation(client: BrowserClient): () => void {
     const to = window.location.href;
     lastUrl = to;
     addNavigationBreadcrumb(from, to);
+    client.capturePageview();
   };
 
   // Listen for popstate (browser back/forward)
@@ -73,6 +75,7 @@ export function instrumentNavigation(client: BrowserClient): () => void {
     const to = window.location.href;
     lastUrl = to;
     addNavigationBreadcrumb(from, to);
+    client.capturePageview();
   };
 
   // Listen for hashchange
@@ -81,6 +84,7 @@ export function instrumentNavigation(client: BrowserClient): () => void {
     const to = event.newURL;
     lastUrl = to;
     addNavigationBreadcrumb(from, to);
+    client.capturePageview();
   };
 
   window.addEventListener('popstate', popstateHandler);

@@ -2,14 +2,28 @@ name: Publish to npm
 
 on:
   push:
-    tags:
-      - 'v*.*.*'
+    branches:
+      - main
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'README.md'
+      - 'src/**'
+      - 'test/**'
+      - '.github/workflows/publish.yml'
+      - '.github/scripts/**'
+  workflow_dispatch:
+
+concurrency:
+  group: browser-npm-publication
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
   publish:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,11 +36,24 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Test
+        run: npm test
+
       - name: Build
         run: npm run build
 
-      - name: Publish
+      - name: Inspect package
+        run: npm pack --dry-run
+
+      - name: Check registry version
+        id: registry
+        run: |
+          PACKAGE=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          node .github/scripts/npm-publish-decision.mjs "$PACKAGE" "$VERSION"
+
+      - name: Publish unpublished version
+        if: steps.registry.outputs.publish == 'true'
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-

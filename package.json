@@ -1,7 +1,7 @@
 {
   "name": "@tracekit/browser",
-  "version": "0.1.1",
-  "description": "TraceKit Browser SDK - Error capture, breadcrumbs, and distributed tracing for browser applications",
+  "version": "0.2.0",
+  "description": "TraceKit Browser SDK - Error capture, distributed tracing, and browser analytics",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -27,6 +27,7 @@
     "dev": "tsup --watch"
   },
   "devDependencies": {
+    "happy-dom": "20.14.0",
     "typescript": "^5.3.0",
     "tsup": "^8.0.0",
     "vitest": "^3.0.0"
