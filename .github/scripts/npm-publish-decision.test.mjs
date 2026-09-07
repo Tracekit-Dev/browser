@@ -51,3 +51,21 @@ test('manual dispatch cannot publish from a non-main ref', () => {
   assert.match(workflow, /if:\s*github\.ref\s*==\s*'refs\/heads\/main'/);
   assert.match(workflow, /group:\s*browser-npm-publication\s*\n\s*cancel-in-progress:\s*false/);
 });
+
+test('publishes through npm trusted publishing with the required toolchain', () => {
+  const workflow = readFileSync(new URL('../workflows/publish.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /runs-on:\s*ubuntu-latest/);
+  assert.match(workflow, /permissions:\s*\n\s*contents:\s*read\s*\n\s*id-token:\s*write/);
+  assert.match(workflow, /actions\/checkout@v6/);
+  assert.match(workflow, /actions\/setup-node@v6/);
+  assert.match(workflow, /node-version:\s*['"]24['"]/);
+  assert.match(workflow, /npm install --global npm@11\.5\.1/);
+  assert.doesNotMatch(workflow, /NPM_TOKEN|NODE_AUTH_TOKEN/);
+  assert.match(workflow, /\.github\/workflows\/publish\.yml/);
+  assert.match(workflow, /npm pack --dry-run --json/);
+});
+
+test('keeps the package repository aligned with the trusted publisher', () => {
+  const packageJson = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+  assert.equal(packageJson.repository.url, 'https://github.com/Tracekit-Dev/browser');
+});
