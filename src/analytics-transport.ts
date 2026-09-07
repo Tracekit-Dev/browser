@@ -9,6 +9,7 @@ export class BrowserAnalyticsTransport {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private inFlight = false;
   private destroyed = false;
+  private activeRequest: Promise<void> | undefined;
   private readonly onPageHide = () => { void this.flush(); };
   private readonly onVisibility = () => { if (typeof document !== 'undefined' && document.visibilityState === 'hidden') void this.flush(); };
 
@@ -30,35 +31,54 @@ export class BrowserAnalyticsTransport {
   }
 
   async flush(): Promise<void> {
-    if (this.inFlight || this.queue.length === 0) return;
+    if (this.inFlight) {
+      await this.activeRequest;
+      return;
+    }
+    if (this.queue.length === 0) return;
     this.inFlight = true;
-    const batch = this.queue.splice(0, Math.min(20, this.queue.length));
-    const payload = this.makePayload(batch);
-    const ok = await this.requestWithRetry(payload.body);
-    batch.forEach((item) => item.resolve(ok));
-    this.inFlight = false;
+    const work = this.flushOneBatch();
+    this.activeRequest = work;
+    try {
+      await work;
+    } finally {
+      if (this.activeRequest === work) this.activeRequest = undefined;
+      this.inFlight = false;
+    }
     if (this.queue.length && !this.destroyed) void this.flush();
   }
 
   destroy(): void {
     if (this.destroyed) return;
-    void this.flush();
     this.destroyed = true;
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
     if (typeof window !== 'undefined') window.removeEventListener('pagehide', this.onPageHide);
     if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.onVisibility);
+    void this.drainAfterDestroy();
   }
 
-  private makePayload(batch: Array<{ event: BrowserAnalyticsEvent }>): { body: string } {
+  private async flushOneBatch(): Promise<void> {
+    const candidate = this.queue.slice(0, Math.min(20, this.queue.length));
+    const payload = this.makePayload(candidate);
+    const batch = this.queue.splice(0, payload.sentCount);
+    const ok = await this.requestWithRetry(payload.body);
+    batch.forEach((item) => item.resolve(ok));
+  }
+
+  private async drainAfterDestroy(): Promise<void> {
+    while (this.inFlight || this.queue.length > 0) await this.flush();
+  }
+
+  private makePayload(batch: Array<{ event: BrowserAnalyticsEvent }>): { body: string; sentCount: number } {
     const events = batch.map((item) => item.event);
     let count = events.length;
     while (count > 0) {
       const wrapped = JSON.stringify({ events: events.slice(0, count) } satisfies BrowserAnalyticsBatch);
-      if (new TextEncoder().encode(wrapped).byteLength <= MAX_ANALYTICS_BODY_BYTES) return { body: wrapped };
+      if (new TextEncoder().encode(wrapped).byteLength <= MAX_ANALYTICS_BODY_BYTES) return { body: wrapped, sentCount: count };
       count--;
     }
-    return { body: JSON.stringify(events[0]) };
+    return { body: JSON.stringify(events[0]), sentCount: 1 };
   }
 
   private async requestWithRetry(body: string): Promise<boolean> {

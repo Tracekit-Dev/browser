@@ -24,13 +24,25 @@ describe('client analytics lifecycle', () => {
   });
 
   it('flushes queued analytics during client destroy', async () => {
-    const fetchMock = vi.fn(() => Promise.resolve(new Response('', { status: 202 })));
+    let releaseFirst: ((response: Response) => void) | undefined;
+    const fetchMock = vi.fn(() => {
+      if (fetchMock.mock.calls.length === 1) return new Promise<Response>((resolve) => { releaseFirst = resolve; });
+      return Promise.resolve(new Response('', { status: 202 }));
+    });
     vi.stubGlobal('fetch', fetchMock);
     const client = new BrowserClient(resolveConfig({ apiKey: 'key', endpoint: 'https://tracekit.test' }));
-    client.track('signup');
-    client.destroy();
+    for (let index = 0; index < 45; index += 1) client.track(`signup-${index}`);
     await new Promise((resolve) => setTimeout(resolve, 120));
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    client.destroy();
+    releaseFirst?.(new Response('', { status: 202 }));
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    const ids = (fetchMock.mock.calls as unknown as Array<[string, RequestInit]>).flatMap((call) => {
+      const payload = JSON.parse(call[1].body as string) as { events?: Array<{ event_id: string }>; event_id?: string };
+      return payload.events?.map((item) => item.event_id) ?? [payload.event_id];
+    });
+    expect(ids).toHaveLength(45);
+    expect(new Set(ids).size).toBe(45);
     vi.unstubAllGlobals();
   });
 
