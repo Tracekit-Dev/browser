@@ -25,8 +25,7 @@ export class BrowserAnalyticsTransport {
     if (new TextEncoder().encode(encoded).byteLength > MAX_ANALYTICS_BODY_BYTES) return Promise.resolve(false);
     if (this.queue.length >= 100) return Promise.resolve(false);
     const result = new Promise<boolean>((resolve) => this.queue.push({ event, resolve }));
-    if (this.queue.length >= 20) void this.flush();
-    else if (!this.timer) this.timer = setTimeout(() => { this.timer = undefined; void this.flush(); }, 100);
+    if (!this.timer) this.timer = setTimeout(() => { this.timer = undefined; void this.flush(); }, 100);
     return result;
   }
 
@@ -53,8 +52,12 @@ export class BrowserAnalyticsTransport {
 
   private makePayload(batch: Array<{ event: BrowserAnalyticsEvent }>): { body: string } {
     const events = batch.map((item) => item.event);
-    const wrapped = JSON.stringify({ events } satisfies BrowserAnalyticsBatch);
-    if (new TextEncoder().encode(wrapped).byteLength <= MAX_ANALYTICS_BODY_BYTES) return { body: wrapped };
+    let count = events.length;
+    while (count > 0) {
+      const wrapped = JSON.stringify({ events: events.slice(0, count) } satisfies BrowserAnalyticsBatch);
+      if (new TextEncoder().encode(wrapped).byteLength <= MAX_ANALYTICS_BODY_BYTES) return { body: wrapped };
+      count--;
+    }
     return { body: JSON.stringify(events[0]) };
   }
 

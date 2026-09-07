@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { BrowserClient } from '../client';
 import { resolveConfig } from '../config';
 
@@ -21,5 +21,27 @@ describe('client analytics lifecycle', () => {
     expect(scope.getRecentTraceContext(300000, 301001)).toBeNull();
     scope.clear();
     expect(scope.getRecentTraceContext(300000, 1000)).toBeNull();
+  });
+
+  it('flushes queued analytics during client destroy', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response('', { status: 202 })));
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new BrowserClient(resolveConfig({ apiKey: 'key', endpoint: 'https://tracekit.test' }));
+    client.track('signup');
+    client.destroy();
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it('removes analytics lifecycle listeners during client destroy', () => {
+    const add = vi.spyOn(window, 'addEventListener');
+    const remove = vi.spyOn(window, 'removeEventListener');
+    const client = new BrowserClient(resolveConfig({ apiKey: 'key' }));
+    client.destroy();
+    client.destroy();
+    expect(add).toHaveBeenCalledWith('pagehide', expect.any(Function));
+    expect(remove).toHaveBeenCalledWith('pagehide', expect.any(Function));
+    add.mockRestore(); remove.mockRestore();
   });
 });
