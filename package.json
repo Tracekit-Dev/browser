@@ -1,7 +1,7 @@
 {
   "name": "@tracekit/browser",
   "version": "0.2.0",
-  "description": "TraceKit Browser SDK - Error capture, breadcrumbs, and distributed tracing for browser applications",
+  "description": "TraceKit Browser SDK - Error capture, distributed tracing, and browser analytics",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

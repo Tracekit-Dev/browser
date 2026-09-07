@@ -42,7 +42,8 @@ const eventId = tracekit.track('signup_completed', {
 Goal names match `[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}`. Names that start with `$` are reserved.
 Properties accept JSON-safe values, up to 50 keys, five levels, and 1,024-byte strings.
 The analytics request body limit is 65,536 bytes.
-The returned 32-character event ID confirms local acceptance, not delivery.
+The returned 32-character event ID means only that local validation succeeded.
+It cannot report a later queue drop or server delivery.
 
 ## Identity and privacy
 
