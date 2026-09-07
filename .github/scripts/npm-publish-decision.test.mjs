@@ -59,10 +59,13 @@ test('publishes through npm trusted publishing with the required toolchain', () 
   assert.match(workflow, /actions\/checkout@v6/);
   assert.match(workflow, /actions\/setup-node@v6/);
   assert.match(workflow, /node-version:\s*['"]24['"]/);
-  assert.match(workflow, /npm install --global npm@11\.5\.1/);
+  assert.match(workflow, /package-manager-cache:\s*false/);
+  assert.match(workflow, /npm install --global npm@11\.19\.1/);
+  assert.doesNotMatch(workflow, /registry-url:/);
   assert.doesNotMatch(workflow, /NPM_TOKEN|NODE_AUTH_TOKEN/);
   assert.match(workflow, /\.github\/workflows\/publish\.yml/);
   assert.match(workflow, /npm pack --dry-run --json/);
+  assert.match(workflow, /npm publish --access public --provenance --tag latest/);
 });
 
 test('keeps the package repository aligned with the trusted publisher', () => {
