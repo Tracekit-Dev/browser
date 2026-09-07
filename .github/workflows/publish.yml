@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: browser-npm-publication-${{ github.ref }}
+  group: browser-npm-publication
   cancel-in-progress: false
 
 permissions:
@@ -23,6 +23,7 @@ permissions:
 
 jobs:
   publish:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

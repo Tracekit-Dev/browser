@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { checkRegistryVersion, classifyRegistryResult } from './npm-publish-decision.mjs';
 
 test('skips an already published exact version', () => {
@@ -43,4 +44,10 @@ test('queries the exact package and version', () => {
 
   assert.equal(decision.action, 'skip');
   assert.deepEqual(command.slice(0, 2), ['npm', ['view', '@tracekit/browser@0.2.0', 'version', '--json']]);
+});
+
+test('manual dispatch cannot publish from a non-main ref', () => {
+  const workflow = readFileSync(new URL('../workflows/publish.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /if:\s*github\.ref\s*==\s*'refs\/heads\/main'/);
+  assert.match(workflow, /group:\s*browser-npm-publication\s*\n\s*cancel-in-progress:\s*false/);
 });

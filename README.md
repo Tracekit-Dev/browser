@@ -86,7 +86,6 @@ try {
 | `environment` | `string` | `'production'` | Environment name for filtering events |
 | `release` | `string` | `undefined` | Release version for tracking regressions |
 | `sampleRate` | `number` | `1.0` | Sample rate for error events (0.0 to 1.0) |
-| `tracesSampleRate` | `number` | `1.0` | Sample rate for distributed traces (0.0 to 1.0) |
 
 ## Documentation
 
