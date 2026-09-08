@@ -1,5 +1,5 @@
 import { generateTraceId } from './id';
-import type { BrowserAnalyticsEvent, RecentTraceContext, ResolvedConfig } from './types';
+import type { AnalyticsIdentitySnapshot, BrowserAnalyticsEvent, RecentTraceContext, ResolvedConfig } from './types';
 import { BrowserAnalyticsTransport, MAX_ANALYTICS_BODY_BYTES } from './analytics-transport';
 
 export const ANALYTICS_SESSION_MAX_AGE_MS = 30 * 60 * 1000;
@@ -173,6 +173,28 @@ export class AnalyticsCollector {
     if (raw === this.lastPageviewURL) return '';
     this.lastPageviewURL = raw;
     return this.capture('$pageview', {}, context);
+  }
+
+  getIdentitySnapshot(): AnalyticsIdentitySnapshot | undefined {
+    if (!this.config.enabled) return undefined;
+    try {
+      const location = this.getLocation();
+      if (!location) return undefined;
+      const { visitorId, sessionId, attribution } = this.ensureIdentity(location);
+      const serviceName = cleanString(this.config.serviceName, 255);
+      const pagePath = cleanString(location.pathname || '/', 2048) || '/';
+      if (!serviceName || !validHex(visitorId, 32) || !validHex(sessionId, 32)) return undefined;
+      return {
+        service_name: serviceName,
+        visitor_id: visitorId,
+        session_id: sessionId,
+        page_path: pagePath,
+        landing_source: attribution.utm_source,
+        landing_referrer: attribution.referrer,
+      };
+    } catch {
+      return undefined;
+    }
   }
 
   track(name: string, properties: Record<string, unknown> = {}, context?: { userId?: string; releaseId?: string; trace?: RecentTraceContext; replayId?: string }): string {

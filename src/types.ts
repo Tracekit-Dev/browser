@@ -174,6 +174,29 @@ export interface BrowserAnalyticsBatch {
   events: BrowserAnalyticsEvent[];
 }
 
+export type BrowserPresenceVisibility = 'visible' | 'hidden';
+
+export interface BrowserPresencePayload {
+  service_name: string;
+  visitor_id: string;
+  session_id: string;
+  tab_id: string;
+  sequence: number;
+  visibility: BrowserPresenceVisibility;
+  page_path: string;
+  landing_source?: string;
+  landing_referrer?: string;
+}
+
+export interface AnalyticsIdentitySnapshot {
+  service_name: string;
+  visitor_id: string;
+  session_id: string;
+  page_path: string;
+  landing_source: string;
+  landing_referrer: string;
+}
+
 export interface RecentTraceContext {
   traceId: string;
   spanId: string;
