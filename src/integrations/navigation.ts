@@ -17,7 +17,7 @@ import type { BrowserClient } from '../client';
  *
  * @returns Teardown function that restores original methods and removes listeners.
  */
-export function instrumentNavigation(client: BrowserClient): () => void {
+export function instrumentNavigation(client: BrowserClient, onNavigate?: () => void, capture = true): () => void {
   if (typeof window === 'undefined') {
     return () => {};
   }
@@ -51,8 +51,8 @@ export function instrumentNavigation(client: BrowserClient): () => void {
     origPushState.apply(this, [data, unused, url]);
     const to = window.location.href;
     lastUrl = to;
-    addNavigationBreadcrumb(from, to);
-    client.capturePageview();
+    if (capture) { addNavigationBreadcrumb(from, to); client.capturePageview(); }
+    onNavigate?.();
   };
 
   // Patch history.replaceState
@@ -65,8 +65,8 @@ export function instrumentNavigation(client: BrowserClient): () => void {
     origReplaceState.apply(this, [data, unused, url]);
     const to = window.location.href;
     lastUrl = to;
-    addNavigationBreadcrumb(from, to);
-    client.capturePageview();
+    if (capture) { addNavigationBreadcrumb(from, to); client.capturePageview(); }
+    onNavigate?.();
   };
 
   // Listen for popstate (browser back/forward)
@@ -74,8 +74,8 @@ export function instrumentNavigation(client: BrowserClient): () => void {
     const from = lastUrl;
     const to = window.location.href;
     lastUrl = to;
-    addNavigationBreadcrumb(from, to);
-    client.capturePageview();
+    if (capture) { addNavigationBreadcrumb(from, to); client.capturePageview(); }
+    onNavigate?.();
   };
 
   // Listen for hashchange
@@ -83,8 +83,8 @@ export function instrumentNavigation(client: BrowserClient): () => void {
     const from = event.oldURL;
     const to = event.newURL;
     lastUrl = to;
-    addNavigationBreadcrumb(from, to);
-    client.capturePageview();
+    if (capture) { addNavigationBreadcrumb(from, to); client.capturePageview(); }
+    onNavigate?.();
   };
 
   window.addEventListener('popstate', popstateHandler);
