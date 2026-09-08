@@ -22,6 +22,21 @@ init({
 `init()` records the first `$pageview`. SPA navigation records later pageviews.
 The default endpoint is `https://app.tracekit.dev`.
 
+## Live visitor presence
+
+Browser `0.3.0` enables live visitor presence with browser analytics.
+The SDK sends the first presence signal after initialization.
+It then sends one signal every 27 to 33 seconds while the page is visible.
+Navigation updates the current page without creating a new visitor session.
+Hidden pages stop regular signals and send one hidden-state update.
+
+Presence uses a tab identifier stored in `sessionStorage`.
+The SDK does not request browser location access.
+TraceKit derives approximate geography on the server without storing the raw IP address.
+
+Set `enabled: false` until your consent policy permits analytics collection.
+Disabled clients create no presence storage, timers, channels, or requests.
+
 ## Analytics goals
 
 Use a namespace import when you record a custom goal.
