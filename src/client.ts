@@ -87,7 +87,7 @@ export class BrowserClient {
     if (integrations.dom) {
       this.teardownFns.push(instrumentDOM(this));
     }
-    this.teardownFns.push(instrumentNavigation(this, () => this.presence?.onNavigation(), integrations.navigation));
+    if (this.config.enabled) this.teardownFns.push(instrumentNavigation(this, () => this.presence?.onNavigation(), integrations.navigation));
     this.presence?.install();
 
     // Install external addon integrations

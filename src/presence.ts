@@ -47,7 +47,7 @@ export class BrowserPresence {
       if (document.visibilityState === 'hidden') this.hide();
       else this.show();
     };
-    const onPageHide = () => { if (document.visibilityState !== 'hidden') this.hide(); };
+    const onPageHide = () => this.hide();
     const onPageShow = () => this.show();
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', onPageHide);
@@ -108,13 +108,12 @@ export class BrowserPresence {
       this.channel = new BroadcastChannel(CHANNEL_NAME);
       const handler = (event: MessageEvent) => {
         if (event.data?.tab_id !== candidate.tab_id) return;
-        collision = true;
-        this.channel?.postMessage({ type: 'owner', tab_id: candidate.tab_id });
+        if (event.data?.type === 'claim') this.channel?.postMessage({ type: 'owner', tab_id: candidate.tab_id });
+        if (event.data?.type === 'owner') collision = true;
       };
       this.channel.addEventListener('message', handler);
       this.channel.postMessage({ type: 'claim', tab_id: candidate.tab_id });
       await new Promise<void>((resolve) => setTimeout(resolve, HANDSHAKE_MS));
-      this.channel.removeEventListener('message', handler);
       if (collision) { this.channel.close(); this.channel = undefined; return this.claimFresh(); }
     } catch { this.channel?.close(); this.channel = undefined; return this.claimFresh(); }
     this.saveTab(candidate);
