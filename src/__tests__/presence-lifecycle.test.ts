@@ -119,6 +119,45 @@ describe('browser presence lifecycle', () => {
     client.destroy();
   });
 
+  it.each([
+    ['empty', ''],
+    ['oversized', 'a'.repeat(33)],
+    ['uppercase', 'A'.repeat(32)],
+    ['hyphenated', '00000000-0000-0000-0000-000000000000'],
+    ['unsafe characters', '../presence-tab-unsafe........'],
+  ])('replaces a %s stored tab identifier with a fresh exact-format identifier', async (_label, tabId) => {
+    vi.useFakeTimers();
+    sessionStorage.setItem('tracekit_presence_tab', JSON.stringify({ tab_id: tabId, sequence: 4 }));
+    const generated = '01234567-89ab-cdef-0123-456789abcdef';
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(generated);
+    const fetchMock = setupFetch();
+    const client = new BrowserClient(resolveConfig({ apiKey: 'public', endpoint: 'https://tracekit.test' }));
+    client.install();
+    await vi.advanceTimersByTimeAsync(50);
+    const stored = JSON.parse(sessionStorage.getItem('tracekit_presence_tab') ?? '{}') as { tab_id: string; sequence: number };
+    expect(stored.tab_id).toBe(generated.replace(/-/g, ''));
+    expect(stored.tab_id).toMatch(/^[0-9a-f]{32}$/);
+    expect(stored.sequence).toBe(1);
+    expect(presenceCalls(fetchMock)[0]?.tab_id).toBe(stored.tab_id);
+    client.destroy();
+  });
+
+  it('replaces a stored record with an unsafe sequence before sending', async () => {
+    vi.useFakeTimers();
+    sessionStorage.setItem('tracekit_presence_tab', JSON.stringify({ tab_id: 'a'.repeat(32), sequence: Number.MAX_SAFE_INTEGER }));
+    const generated = 'fedcba98-7654-3210-fedc-ba9876543210';
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(generated);
+    const fetchMock = setupFetch();
+    const client = new BrowserClient(resolveConfig({ apiKey: 'public', endpoint: 'https://tracekit.test' }));
+    client.install();
+    await vi.advanceTimersByTimeAsync(50);
+    const stored = JSON.parse(sessionStorage.getItem('tracekit_presence_tab') ?? '{}') as { tab_id: string; sequence: number };
+    expect(stored.tab_id).toBe(generated.replace(/-/g, ''));
+    expect(stored.sequence).toBe(1);
+    expect(presenceCalls(fetchMock)[0]?.sequence).toBe(1);
+    client.destroy();
+  });
+
   it('keeps an ownership listener after a cloned tab collision regenerates its tab', async () => {
     vi.useFakeTimers();
     vi.stubGlobal('BroadcastChannel', FakeBroadcastChannel);
