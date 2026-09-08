@@ -4,7 +4,8 @@ import { SDK_VERSION } from './otlp';
 export const MAX_PRESENCE_BODY_BYTES = 16_384;
 
 const bytes = (value: string): number => new TextEncoder().encode(value).byteLength;
-const validText = (value: unknown, max: number): value is string => typeof value === 'string' && bytes(value) <= max && !/[\u0000-\u001f\u007f]/.test(value);
+const validText = (value: unknown, max: number, required = false): value is string =>
+  typeof value === 'string' && (!required || value.length > 0) && bytes(value) <= max && !/[\u0000-\u001f\u007f]/.test(value);
 
 export class BrowserPresenceTransport {
   private destroyed = false;
@@ -40,7 +41,7 @@ export class BrowserPresenceTransport {
   destroy(): void { this.destroyed = true; }
 
   private valid(payload: BrowserPresencePayload): boolean {
-    if (!validText(payload.service_name, 255) || !validText(payload.visitor_id, 255) || !validText(payload.session_id, 255) || !validText(payload.tab_id, 255) || !validText(payload.page_path, 2048)) return false;
+    if (!validText(payload.service_name, 255, true) || !validText(payload.visitor_id, 255, true) || !validText(payload.session_id, 255, true) || !validText(payload.tab_id, 255, true) || !validText(payload.page_path, 2048, true)) return false;
     if (!Number.isSafeInteger(payload.sequence) || payload.sequence < 0 || !['visible', 'hidden'].includes(payload.visibility)) return false;
     if (payload.landing_source !== undefined && !validText(payload.landing_source, 255)) return false;
     if (payload.landing_referrer !== undefined && payload.landing_referrer !== '' && !validText(payload.landing_referrer, 2048)) return false;

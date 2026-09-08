@@ -42,7 +42,10 @@ export class BrowserPresence {
 
   private async initialize(): Promise<void> {
     this.tab = await this.claimTab();
-    if (this.destroyed || !this.tab) return;
+    if (this.destroyed || !this.tab) {
+      this.closeChannel();
+      return;
+    }
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') this.hide();
       else this.show();
@@ -79,7 +82,8 @@ export class BrowserPresence {
   private schedule(): void {
     if (this.destroyed || document.visibilityState === 'hidden') return;
     if (this.timer) clearTimeout(this.timer);
-    const delay = 27_000 + Math.floor(Math.random() * 6_001);
+    const random = Math.max(0, Math.min(1, Math.random()));
+    const delay = 27_000 + Math.min(6_000, Math.floor(random * 6_001));
     this.timer = setTimeout(() => { this.timer = undefined; if (document.visibilityState !== 'hidden') { void this.send('visible'); this.schedule(); } }, delay);
   }
 
@@ -105,25 +109,53 @@ export class BrowserPresence {
     const candidate = stored ?? fresh();
     let collision = false;
     try {
-      this.channel = new BroadcastChannel(CHANNEL_NAME);
-      const handler = (event: MessageEvent) => {
-        if (event.data?.tab_id !== candidate.tab_id) return;
-        if (event.data?.type === 'claim') this.channel?.postMessage({ type: 'owner', tab_id: candidate.tab_id });
-        if (event.data?.type === 'owner') collision = true;
-      };
-      this.channel.addEventListener('message', handler);
-      this.channel.postMessage({ type: 'claim', tab_id: candidate.tab_id });
+      const channel = this.openOwnershipChannel(candidate, () => { collision = true; });
+      channel.postMessage({ type: 'claim', tab_id: candidate.tab_id });
       await new Promise<void>((resolve) => setTimeout(resolve, HANDSHAKE_MS));
-      if (collision) { this.channel.close(); this.channel = undefined; return this.claimFresh(); }
-    } catch { this.channel?.close(); this.channel = undefined; return this.claimFresh(); }
+      if (this.destroyed) {
+        this.closeChannel();
+        return candidate;
+      }
+      if (collision) {
+        this.closeChannel();
+        return this.claimFresh();
+      }
+    } catch {
+      this.closeChannel();
+      return this.claimFresh();
+    }
     this.saveTab(candidate);
     return candidate;
   }
 
+  private openOwnershipChannel(candidate: TabRecord, onCollision: () => void): BroadcastChannel {
+    const channel = new BroadcastChannel(CHANNEL_NAME);
+    this.channel = channel;
+    const handler = (event: MessageEvent) => {
+      if (event.data?.tab_id !== candidate.tab_id) return;
+      if (event.data?.type === 'claim') channel.postMessage({ type: 'owner', tab_id: candidate.tab_id });
+      if (event.data?.type === 'owner') onCollision();
+    };
+    channel.addEventListener('message', handler);
+    return channel;
+  }
+
   private claimFresh(): TabRecord {
     const next = { tab_id: randomId(), sequence: 0 };
+    try {
+      const channel = this.openOwnershipChannel(next, () => { /* A fresh random ID is the ownership boundary. */ });
+      channel.postMessage({ type: 'claim', tab_id: next.tab_id });
+    } catch {
+      this.closeChannel();
+    }
     this.saveTab(next);
     return next;
+  }
+
+  private closeChannel(): void {
+    const channel = this.channel;
+    this.channel = undefined;
+    channel?.close();
   }
 
   private saveTab(value: TabRecord): void { try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(value)); } catch { /* blocked storage */ } }
