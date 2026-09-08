@@ -31,4 +31,15 @@ describe('navigation analytics', () => {
     teardown();
     expect(window.history.pushState).toBe(originalPush);
   });
+
+  it('keeps presence navigation active when navigation integration is disabled', () => {
+    const onNavigate = vi.fn();
+    const capturePageview = vi.fn();
+    const client = { capturePageview, getScope: () => ({ addBreadcrumb: vi.fn() }) } as never;
+    const teardown = instrumentNavigation(client, onNavigate, false);
+    window.history.pushState({}, '', '/presence-only');
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+    expect(capturePageview).not.toHaveBeenCalled();
+    teardown();
+  });
 });

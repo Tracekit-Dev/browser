@@ -30,6 +30,7 @@ import { instrumentDOM } from './integrations/dom';
 import { instrumentNavigation } from './integrations/navigation';
 import { AnalyticsCollector } from './analytics';
 import { BrowserAnalyticsTransport } from './analytics-transport';
+import { BrowserPresence } from './presence';
 
 export class BrowserClient {
   private config: ResolvedConfig;
@@ -39,6 +40,7 @@ export class BrowserClient {
   private installed: boolean = false;
   private teardownFns: (() => void)[] = [];
   private analytics: AnalyticsCollector | null = null;
+  private presence: BrowserPresence | null = null;
 
   constructor(config: ResolvedConfig) {
     this.config = config;
@@ -47,6 +49,7 @@ export class BrowserClient {
     this.dedup = new Deduplicator();
     if (config.enabled) {
       this.analytics = new AnalyticsCollector(config, new BrowserAnalyticsTransport(config));
+      this.presence = new BrowserPresence(this);
     }
   }
 
@@ -84,9 +87,8 @@ export class BrowserClient {
     if (integrations.dom) {
       this.teardownFns.push(instrumentDOM(this));
     }
-    if (integrations.navigation) {
-      this.teardownFns.push(instrumentNavigation(this));
-    }
+    if (this.config.enabled) this.teardownFns.push(instrumentNavigation(this, () => this.presence?.onNavigation(), integrations.navigation));
+    this.presence?.install();
 
     // Install external addon integrations
     for (const addon of this.config.addons) {
@@ -280,6 +282,8 @@ export class BrowserClient {
     return this.analytics.capturePageview(this.analyticsContext());
   }
 
+  getAnalyticsIdentitySnapshot() { return this.analytics?.getIdentitySnapshot(); }
+
   private analyticsContext(): { userId?: string; releaseId?: string; trace?: import('./types').RecentTraceContext; replayId?: string } {
     const userId = this.scope.getUser()?.id;
     const context: { userId?: string; releaseId?: string; trace?: import('./types').RecentTraceContext; replayId?: string } = {
@@ -360,6 +364,8 @@ export class BrowserClient {
   destroy(): void {
     this.analytics?.destroy();
     this.analytics = null;
+    this.presence?.destroy();
+    this.presence = null;
     for (const fn of this.teardownFns) {
       try {
         fn();
